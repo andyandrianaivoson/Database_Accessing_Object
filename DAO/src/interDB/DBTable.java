@@ -26,4 +26,5 @@ public @interface DBTable {
     public String id() default "0";
     public String idDim() default"0";
     public String sequence() default "0";
+    public SGBD base() default SGBD.POSTGRES;
 }

@@ -13,8 +13,10 @@ import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.Vector;
 import java.util.stream.Collectors;
@@ -200,8 +202,8 @@ public class InterDB {
         }
     }
 
-    public static Vector find(Connection con, Object obj) throws Exception {
-        Vector valiny = new Vector();
+    public static List find(Connection con, Object obj) throws Exception {
+        List valiny = new ArrayList();
         Class c=obj.getClass();
         Constructor constru=c.getConstructor();
         if(constru==null)
@@ -244,7 +246,7 @@ public class InterDB {
                     
                     field.getSetter().invoke(temp, res.getObject(field.getField()));
                 }
-                valiny.addElement(temp);
+                valiny.add(temp);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -256,6 +258,52 @@ public class InterDB {
                 res.close();
             return valiny;
         }
+    }
+    
+    public static List findAll(Connection con, Class c,int start,int count)throws Exception{
+        List valiny= new ArrayList();
+        Constructor constru=c.getConstructor();
+        if(constru==null)
+                throw new NoSuchMethodException("unfinded constructor with no arguments");
+        if(!FIELD_MAPPING.containsKey(c.getCanonicalName()))
+            mapFields(c);
+        String table=TABLE_MAPPING.get(c.getCanonicalName()).split(",,,")[0];
+        
+        String req="select * from "+table;
+        if(start>0)
+            req+=" offset "+start;
+        if(count>0)
+            req+= " limit "+count;
+        
+        PreparedStatement stmt=null;
+        ResultSet res=null;
+        try {
+            res=stmt.executeQuery();
+            ResultSetMetaData meta=res.getMetaData();
+            ///mbola tsy vita
+            Vector<String> listeCol=getColumnsName(meta);
+            Set<FieldDAO> fields=fieldsSetterMap(c, listeCol);
+                if(fields.isEmpty())
+                    throw new NoReference("no match found between  class mapping :"+c.getCanonicalName()+" and the table");
+            while(res.next()){
+                Object temp=constru.newInstance();
+                for(FieldDAO field:fields){
+                    
+                    field.getSetter().invoke(temp, res.getObject(field.getField()));
+                }
+                valiny.add(temp);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw e;
+        }finally{
+            if(stmt!=null)
+                stmt.close();
+            if(res!=null)
+                res.close();
+            return valiny;
+        }
+        
     }
     
     public static int count(Connection con,String req,Vector parameters)throws Exception{
@@ -336,8 +384,8 @@ public class InterDB {
         }
     }
    
-    public static Vector find(Connection con,Class c,String req,Vector parameters)throws Exception{
-        Vector valiny= new Vector();
+    public static List find(Connection con,Class c,String req,Vector parameters)throws Exception{
+        List valiny= new ArrayList();
         Constructor constru=c.getConstructor();
         if(constru==null)
                 throw new NoSuchMethodException("unfinded constructor with no arguments");
@@ -362,7 +410,7 @@ public class InterDB {
                 for(FieldDAO field:fields){
                     field.getSetter().invoke(temp, res.getObject(field.getField()));
                 }
-                valiny.addElement(temp);
+                valiny.add(temp);
             }
         } catch (Exception e) {
             throw e;
@@ -375,8 +423,8 @@ public class InterDB {
         }
     }
     
-    public static Vector search(Connection con,Class c, SearchParameter params)throws Exception{
-        Vector valiny = new Vector();
+    public static List search(Connection con,Class c, SearchParameter params)throws Exception{
+        List valiny = new ArrayList();
         Constructor constru=c.getConstructor();
         if(constru==null)
                 throw new NoSuchMethodException("unfinded constructor with no arguments");
@@ -510,7 +558,7 @@ public class InterDB {
                 for(FieldDAO field:fields){
                     field.getSetter().invoke(temp, res.getObject(field.getField()));
                 }
-                valiny.addElement(temp);
+                valiny.add(temp);
             }
         } catch (Exception e) {
             throw e;
