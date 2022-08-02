@@ -18,7 +18,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.Vector;
 import java.util.stream.Collectors;
 
 /**
@@ -50,21 +49,32 @@ public class InterDB {
     private static String structureId(Connection con, String sequence, String idDim) throws Exception {
         String req = "select nextval(?)";
         String valiny = idDim;
-        PreparedStatement stmt = con.prepareStatement(req);
-        stmt.setObject(1, sequence);
-        ResultSet res = stmt.executeQuery();
+        PreparedStatement stmt=null;
+        ResultSet res=null;
+        try{
+            stmt = con.prepareStatement(req);
+            stmt.setObject(1, sequence);
+            res = stmt.executeQuery();
         while (res.next()) {
             valiny += res.getString(1);
         }
-        res.close();
-        stmt.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw e;
+        }finally{
+            if(res!=null)
+                res.close();
+            if(stmt!=null)
+                stmt.close();
+        }
         return valiny;
+        
     }
 
     public static void insert(Connection con, Object obj) throws Exception {
         Class c = obj.getClass();
         FieldDAO fieldId = null;
-        String table = null, idOb = null, seq = null, idDim = null;
+        String table = null, idOb = null, seq = null, idDim = null,idtype=null;
         if (!FIELD_MAPPING.containsKey(c.getCanonicalName()))
             mapFields(c);
             
@@ -73,6 +83,7 @@ public class InterDB {
         idOb = ref[1];
         seq = ref[2];
         idDim = ref[3];
+        idtype = ref[4];
         
         HashMap<String, Method> map = InterDB.fieldsGetterMap(c, obj);
         if (map.isEmpty()) {
@@ -80,8 +91,7 @@ public class InterDB {
         }
         String req = "insert into " + table + " (";
 
-        if (idOb.compareTo("") != 0) {
-            req += idOb + ",";
+        if (idOb.compareTo("0") != 0) {
             fieldId = FIELD_MAPPING.get(c.getCanonicalName()).stream()
                     .filter(line -> line.isId())
                     .findFirst()
@@ -90,8 +100,11 @@ public class InterDB {
                 throw new NoReference("fatal error");
             }
 
-            String id = structureId(con, seq, idDim);
-            fieldId.getSetter().invoke(obj, id);
+            if(idtype.compareTo(IdType.SERIAL.value())!=0){
+                req += idOb + ",";
+                String id = structureId(con, seq, idDim);
+                fieldId.getSetter().invoke(obj, id);
+            }
         }
 
 
@@ -105,7 +118,7 @@ public class InterDB {
             }
         }
         req += "values (";
-        if (idOb.compareTo("") != 0) {
+        if (idOb.compareTo("0") != 0 && idtype.compareTo(IdType.SERIAL.value())!=0) {
             req += "?,";
         }
 
@@ -116,11 +129,12 @@ public class InterDB {
                 req += "?,";
             }
         }
+        System.out.println(req);
         PreparedStatement stmt = null;
         try {
             stmt = con.prepareStatement(req);
             int ii = 1;
-            if (idOb.compareTo("") != 0) {
+            if (idOb.compareTo("0") != 0 && idtype.compareTo(IdType.SERIAL.value())!=0) {
                 stmt.setObject(1, fieldId.getGetter().invoke(obj));
                 ii ++;
             }
@@ -128,11 +142,49 @@ public class InterDB {
                 stmt.setObject(ii, map.get(keys[i]).invoke(obj));
                 ii++;
             }
-            stmt.executeUpdate();
+            int status=stmt.executeUpdate();
+            if(idtype.compareTo(IdType.SERIAL.value())==0)
+                getSerialId(con, table ,obj, map, fieldId);
         } catch (Exception e) {
+            e.printStackTrace();
             throw e;
         }finally{
             stmt.close();
+        }
+    }
+    
+    public static void getSerialId(Connection con,String table,Object obj,HashMap<String, Method> map,FieldDAO fieldId)throws Exception{
+        String req="select "+fieldId.getField()+" from "+table+" where ";
+        List<Object> params = new ArrayList<>();
+        String[] keys=map.keySet().toArray(new String[0]);
+        for(int i=0;i<keys.length;i++){
+            if(i==0)
+                req+= " "+keys[i]+"=? ";
+            else
+                req+=" and "+keys[i]+"=? ";
+        }
+        req+= " order by "+fieldId.getField()+" desc limit 1";
+        PreparedStatement stmt=null;
+        ResultSet res=null;
+        try {
+            stmt= con.prepareStatement(req);
+            int i=1;
+            for(String key:keys){
+                stmt.setObject(i, map.get(key).invoke(obj));
+                i++;
+            }
+            res=stmt.executeQuery();
+            while(res.next()){
+                fieldId.getSetter().invoke(obj, res.getObject(1));
+            }
+        }catch(Exception e){
+            e.printStackTrace();
+            throw e;
+        }finally{
+            if(res!=null)
+                res.close();
+            if(stmt!=null)
+                stmt.close();
         }
     }
 
@@ -194,6 +246,7 @@ public class InterDB {
             stmt.setObject(ii,fieldRef.getGetter().invoke(obj));
             stmt.executeUpdate();
         } catch (Exception e) {
+            e.printStackTrace();
             throw e;
         }finally{
             if(stmt!=null){
@@ -202,10 +255,10 @@ public class InterDB {
         }
     }
 
-    public static List find(Connection con, Object obj) throws Exception {
-        List valiny = new ArrayList();
-        Class c=obj.getClass();
-        Constructor constru=c.getConstructor();
+    public static <T> List<T> find(Connection con, T obj) throws Exception {
+        List<T> valiny = new ArrayList<>();
+        Class<T> c=(Class<T>)obj.getClass();
+        Constructor<T> constru=c.getConstructor();
         if(constru==null)
                 throw new NoSuchMethodException("unfinded constructor with no arguments");
         if(!FIELD_MAPPING.containsKey(c.getCanonicalName()))
@@ -222,7 +275,7 @@ public class InterDB {
             if(i==0)
                 req+= " "+keys[i]+"=? ";
             else
-                req+=" and"+keys[i]+"=? ";
+                req+=" and "+keys[i]+"=? ";
         }
         PreparedStatement stmt=null;
         ResultSet res=null;
@@ -236,12 +289,12 @@ public class InterDB {
             res=stmt.executeQuery();
             ResultSetMetaData meta=res.getMetaData();
             ///mbola tsy vita
-            Vector<String> listeCol=getColumnsName(meta);
+            List<String> listeCol=getColumnsName(meta);
             Set<FieldDAO> fields=fieldsSetterMap(c, listeCol);
                 if(fields.isEmpty())
                     throw new NoReference("no match found between  class mapping :"+c.getCanonicalName()+" and the table");
             while(res.next()){
-                Object temp=constru.newInstance();
+                T temp=constru.newInstance();
                 for(FieldDAO field:fields){
                     
                     field.getSetter().invoke(temp, res.getObject(field.getField()));
@@ -252,17 +305,17 @@ public class InterDB {
             e.printStackTrace();
             throw e;
         }finally{
-            if(stmt!=null)
-                stmt.close();
             if(res!=null)
                 res.close();
-            return valiny;
+            if(stmt!=null)
+                stmt.close();
         }
+        return valiny;
     }
     
-    public static List findAll(Connection con, Class c,int start,int count)throws Exception{
-        List valiny= new ArrayList();
-        Constructor constru=c.getConstructor();
+    public static <T> List<T> findAll(Connection con, Class<T> c,int start,int count)throws Exception{
+        List<T> valiny= new ArrayList<>();
+        Constructor<T> constru=c.getConstructor();
         if(constru==null)
                 throw new NoSuchMethodException("unfinded constructor with no arguments");
         if(!FIELD_MAPPING.containsKey(c.getCanonicalName()))
@@ -278,15 +331,16 @@ public class InterDB {
         PreparedStatement stmt=null;
         ResultSet res=null;
         try {
+            stmt=con.prepareStatement(req);
             res=stmt.executeQuery();
             ResultSetMetaData meta=res.getMetaData();
             ///mbola tsy vita
-            Vector<String> listeCol=getColumnsName(meta);
+            List<String> listeCol=getColumnsName(meta);
             Set<FieldDAO> fields=fieldsSetterMap(c, listeCol);
                 if(fields.isEmpty())
                     throw new NoReference("no match found between  class mapping :"+c.getCanonicalName()+" and the table");
             while(res.next()){
-                Object temp=constru.newInstance();
+                T temp=constru.newInstance();
                 for(FieldDAO field:fields){
                     
                     field.getSetter().invoke(temp, res.getObject(field.getField()));
@@ -297,16 +351,16 @@ public class InterDB {
             e.printStackTrace();
             throw e;
         }finally{
-            if(stmt!=null)
-                stmt.close();
             if(res!=null)
                 res.close();
-            return valiny;
+            if(stmt!=null)
+                stmt.close();
         }
+        return valiny;
         
     }
     
-    public static int count(Connection con,String req,Vector parameters)throws Exception{
+    public static int count(Connection con,String req,List<Object> parameters)throws Exception{
         int valiny=0;
         PreparedStatement stmt=null;
         ResultSet res=null;
@@ -314,7 +368,7 @@ public class InterDB {
             stmt=con.prepareStatement(req);
             int ii=1;
             for(int i=0;i<parameters.size();i++){
-                stmt.setObject(ii, parameters.elementAt(i));
+                stmt.setObject(ii, parameters.get(i));
                 ii++;
             }
             res=stmt.executeQuery();
@@ -322,17 +376,18 @@ public class InterDB {
                 valiny=res.getInt(1);
             }
         } catch (Exception e) {
+            e.printStackTrace();
             throw e;
         }finally{
             if(res!=null)
                 res.close();
             if(stmt!=null)
                 stmt.close();
-            return valiny;
         }
+        return valiny;
     }
     
-    public static Date getDate(Connection con,String req,Vector parameters)throws Exception{
+    public static Date getDate(Connection con,String req,List<Object> parameters)throws Exception{
         Date valiny=null;
         PreparedStatement stmt=null;
         ResultSet res=null;
@@ -340,7 +395,7 @@ public class InterDB {
             stmt=con.prepareStatement(req);
             int ii=1;
             for(int i=0;i<parameters.size();i++){
-                stmt.setObject(ii, parameters.elementAt(i));
+                stmt.setObject(ii, parameters.get(i));
                 ii++;
             }
             res=stmt.executeQuery();
@@ -348,17 +403,18 @@ public class InterDB {
                 valiny=res.getDate(1);
             }
         } catch (Exception e) {
+            e.printStackTrace();
             throw e;
         }finally{
             if(res!=null)
                 res.close();
             if(stmt!=null)
                 stmt.close();
-            return valiny;
         }
+        return valiny;
     }
     
-    public static float sum(Connection con,String req,Vector parameters)throws Exception{
+    public static float sum(Connection con,String req,List<Object> parameters)throws Exception{
         float valiny=0;
         PreparedStatement stmt=null;
         ResultSet res=null;
@@ -366,7 +422,7 @@ public class InterDB {
             stmt=con.prepareStatement(req);
             int ii=1;
             for(int i=0;i<parameters.size();i++){
-                stmt.setObject(ii, parameters.elementAt(i));
+                stmt.setObject(ii, parameters.get(i));
                 ii++;
             }
             res=stmt.executeQuery();
@@ -374,19 +430,20 @@ public class InterDB {
                 valiny=res.getFloat(1);
             }
         } catch (Exception e) {
+            e.printStackTrace();
             throw e;
         }finally{
             if(res!=null)
                 res.close();
             if(stmt!=null)
                 stmt.close();
-            return valiny;
         }
+        return valiny;
     }
    
-    public static List find(Connection con,Class c,String req,Vector parameters)throws Exception{
-        List valiny= new ArrayList();
-        Constructor constru=c.getConstructor();
+    public static <T> List<T> find(Connection con,Class<T> c,String req,List<Object> parameters)throws Exception{
+        List<T> valiny= new ArrayList<>();
+        Constructor<T> constru=c.getConstructor();
         if(constru==null)
                 throw new NoSuchMethodException("unfinded constructor with no arguments");
         PreparedStatement stmt=null;
@@ -395,37 +452,38 @@ public class InterDB {
             stmt= con.prepareStatement(req);
             int ii=1;
             for(int i=0;i<parameters.size();i++){
-                stmt.setObject(ii, parameters.elementAt(i));
+                stmt.setObject(ii, parameters.get(i));
                 ii++;
             }
             res=stmt.executeQuery();
             ResultSetMetaData meta=res.getMetaData();
             
-            Vector<String> listeCol=getColumnsName(meta);
+            List<String> listeCol=getColumnsName(meta);
             Set<FieldDAO> fields=fieldsSetterMap(c, listeCol);
                 if(fields.isEmpty())
                     throw new NoReference("no match found between  class mapping :"+c.getCanonicalName()+" and the table");
             while(res.next()){
-                Object temp=constru.newInstance();
+                T temp=constru.newInstance();
                 for(FieldDAO field:fields){
                     field.getSetter().invoke(temp, res.getObject(field.getField()));
                 }
                 valiny.add(temp);
             }
         } catch (Exception e) {
+            e.printStackTrace();
             throw e;
         }finally{
-            if(stmt!=null)
-                stmt.close();
             if(res!=null)
                 res.close();
-            return valiny;
+            if(stmt!=null)
+                stmt.close();
         }
+        return valiny;
     }
     
-    public static List search(Connection con,Class c, SearchParameter params)throws Exception{
-        List valiny = new ArrayList();
-        Constructor constru=c.getConstructor();
+    public static <T> List<T> search(Connection con,Class<T> c, SearchParameter params)throws Exception{
+        List<T> valiny = new ArrayList<>();
+        Constructor<T> constru=c.getConstructor();
         if(constru==null)
                 throw new NoSuchMethodException("unfinded constructor with no arguments");
         if(!FIELD_MAPPING.containsKey(c.getCanonicalName()))
@@ -449,7 +507,7 @@ public class InterDB {
         String[] likeKeys=like.keySet().toArray(new String[0]);
         
         boolean isVarEmpty=params.isVariableEmpty();
-        HashMap<String,Vector> var=params.getVariable();
+        HashMap<String,List<Object>> var=params.getVariable();
         String[] varKeys=var.keySet().toArray(new String[0]);
         
         String dateRef=params.getDateRef();
@@ -480,18 +538,33 @@ public class InterDB {
                     req+=" ( ";
                     for(int ii=0;ii<var.get(varKeys[i]).size();ii++){   
                         if(ii==0)
-                            req+=" "+varKeys[i]+"=? ";
+                            if(var.get(varKeys[i]).get(ii)==null)
+                                req+=" "+varKeys[i]+" is null ";
+                            else
+                                req+=" "+varKeys[i]+"=? ";
+                            
                         else
-                            req+=" or "+varKeys[i]+"=? ";
+                            if(var.get(varKeys[i]).get(ii)==null)
+                                req+=" or "+varKeys[i]+" is null ";
+                            else
+                                req+=" or "+varKeys[i]+"=? ";
+                            
                     }
                     req+=" ) ";
                 }else{
                     req+=" and ( ";
                     for(int ii=0;ii<var.get(varKeys[i]).size();ii++){   
                         if(ii==0)
-                            req+=" "+varKeys[i]+"=? ";
+                            if(var.get(varKeys[i]).get(ii)==null)
+                                req+=" "+varKeys[i]+" is null ";
+                            else
+                                req+=" "+varKeys[i]+"=? ";
+                            
                         else
-                            req+=" or "+varKeys[i]+"=? ";
+                            if(var.get(varKeys[i]).get(ii)==null)
+                                req+=" or "+varKeys[i]+" is null ";
+                            else
+                                req+=" or "+varKeys[i]+"=? ";
                     }
                     req+=" ) ";
                 }
@@ -513,6 +586,8 @@ public class InterDB {
             }
         }
         
+//        System.out.println(" ito ny req ="+req);
+        
         PreparedStatement stmt=null;
         ResultSet res=null;
         try {
@@ -521,16 +596,19 @@ public class InterDB {
 
             if(!isLikeEmpty){
                 for(int i=0;i<likeKeys.length;i++){
-                    stmt.setObject(indice, like.get(likeKeys[i]));
+                    stmt.setObject(indice,like.get(likeKeys[i]));
                     indice++;
                 }
             }
             if(!isVarEmpty){
                 
                 for(int i=0;i<varKeys.length;i++){
-                    Vector v=var.get(varKeys[i]);
-                    for(int ii=0;ii<v.size();ii++){   
-                        stmt.setObject(indice,v.elementAt(ii));
+                    List<Object> v=var.get(varKeys[i]);
+                    for(int ii=0;ii<v.size();ii++){  
+//                        System.out.println(v.get(ii));
+                        if(v.get(ii)==null)
+                            continue;
+                        stmt.setObject(indice,v.get(ii));
                         indice++;
                     }
                 }
@@ -549,26 +627,27 @@ public class InterDB {
             res=stmt.executeQuery();
             ResultSetMetaData meta=res.getMetaData();
             ///mbola tsy vita
-            Vector<String> listeCol=getColumnsName(meta);
+            List<String> listeCol=getColumnsName(meta);
             Set<FieldDAO> fields=fieldsSetterMap(c, listeCol);
                 if(fields.isEmpty())
                     throw new NoReference("no match found between  class mapping :"+c.getCanonicalName()+" and the table");
             while(res.next()){
-                Object temp=constru.newInstance();
+                T temp=constru.newInstance();
                 for(FieldDAO field:fields){
                     field.getSetter().invoke(temp, res.getObject(field.getField()));
                 }
                 valiny.add(temp);
             }
         } catch (Exception e) {
+            e.printStackTrace();
             throw e;
         }finally{
-            if(stmt!=null)
-                stmt.close();
             if(res!=null)
                 res.close();
-            return valiny;
+            if(stmt!=null)
+                stmt.close();
         }
+        return valiny;
     }
     
     /*
@@ -604,14 +683,15 @@ public class InterDB {
 
         return map;
     }
-    private static Vector<String> getColumnsName(ResultSetMetaData meta)throws Exception {
-        Vector<String> columnsName=new Vector<String>();
+    private static List<String> getColumnsName(ResultSetMetaData meta)throws Exception {
+        List<String> columnsName=new ArrayList<String>();
+        
         for(int i=1;i<=meta.getColumnCount();i++){
-            columnsName.addElement(meta.getColumnName(i));
+            columnsName.add(meta.getColumnName(i));
         }
         return columnsName;
     }
-    private static Set<FieldDAO> fieldsSetterMap(Class c,Vector<String> listeCol)throws Exception{
+    private static Set<FieldDAO> fieldsSetterMap(Class c,List<String> listeCol)throws Exception{
         Set<FieldDAO> valiny=null;
         Class sup=c.getSuperclass();
         if(sup!=null && !sup.equals(Object.class))
@@ -625,7 +705,7 @@ public class InterDB {
                     .filter(line -> {
                         boolean match = false;
                         for(int i=0;i<listeCol.size();i++){
-                            if(listeCol.elementAt(i).compareToIgnoreCase(line.getField())==0){
+                            if(listeCol.get(i).compareToIgnoreCase(line.getField())==0){
                                 match= true;
                                 break;
                             }
@@ -639,7 +719,7 @@ public class InterDB {
                     .filter(line -> {
                         boolean match = false;
                         for(int i=0;i<listeCol.size();i++){
-                            if(listeCol.elementAt(i).compareToIgnoreCase(line.getField())==0){
+                            if(listeCol.get(i).compareToIgnoreCase(line.getField())==0){
                                 match= true;
                                 break;
                             }
@@ -668,16 +748,19 @@ public class InterDB {
         String idOb = tab.id();
         String seq = tab.sequence();
         String idDim = tab.idDim();
+        IdType idtype= tab.idType();
         if (idOb.compareTo("0") != 0) {
-            if (seq.compareTo("0") == 0) {
-                throw new NoReference("Sequence undifined");
-            } else {
-                if (idDim.compareTo("0") == 0) {
-                    throw new NoReference("id diminutif undifined");
+            if(idtype==IdType.MODIFIED){
+                if (seq.compareTo("0") == 0) {
+                    throw new NoReference("Sequence undifined");
+                } else {
+                    if (idDim.compareTo("0") == 0) {
+                        throw new NoReference("id diminutif undifined");
+                    }
                 }
             }
         }
-        String value = table + ",,," + idOb + ",,," + seq + ",,," + idDim;
+        String value = table + ",,," + idOb + ",,," + seq + ",,," + idDim+ ",,,"+idtype.value();
         TABLE_MAPPING.put(c.getCanonicalName(), value);
     }
     
@@ -718,6 +801,10 @@ public class InterDB {
                 temp.setField(field.getName());
                 temp.setGetter(getter);
                 temp.setSetter(setter);
+                
+                if (field.getName().compareTo(elements[1]) == 0) {
+                    temp.setId(true);
+                }
 
                 fieldDAOs.add(temp);
                 mapped.add(field.getName());

@@ -6,11 +6,12 @@
 package interDB;
 
 import java.sql.Date;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
+import java.util.List;
 import java.util.Set;
-import java.util.Vector;
+
 
 /**
  *
@@ -23,7 +24,7 @@ public class SearchParameter {
     private static final Set<String> DATE_SEPARATOR = new HashSet<>();
 
     private HashMap<String, String> like = new HashMap<>();
-    private HashMap<String, Vector> variable = new HashMap<>();
+    private HashMap<String, List<Object>> variable = new HashMap<>();
     private String dateRef;
     private Date dateMin;
     private Date dateMax;
@@ -47,10 +48,10 @@ public class SearchParameter {
     public void addInTheVariable(String k, Object v) {
         if (!"".equals(v) && !"default".equals(v) && !"none".equals(v)) {
             if (variable.get(k) == null) {
-                Vector el = new Vector();
+                List<Object> el = new ArrayList<>();
                 variable.put(k, el);
             }
-            variable.get(k).addElement(v);
+            variable.get(k).add(v);
         }
     }
 
@@ -111,7 +112,7 @@ public class SearchParameter {
         return variable.isEmpty();
     }
 
-    public HashMap<String, Vector> getVariable() {
+    public HashMap<String, List<Object>> getVariable() {
         return variable;
     }
 
