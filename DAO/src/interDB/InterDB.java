@@ -153,6 +153,10 @@ public class InterDB {
         }
     }
     
+    public static void insertVao(Connection con,Object obj) throws Exception{
+        
+    }
+    
     public static void getSerialId(Connection con,String table,Object obj,HashMap<String, Method> map,FieldDAO fieldId)throws Exception{
         String req="select "+fieldId.getField()+" from "+table+" where ";
         List<Object> params = new ArrayList<>();
@@ -774,58 +778,58 @@ public class InterDB {
         Field[] fields = c.getDeclaredFields();
         Set<FieldDAO> fieldDAOs = new HashSet<>();
         Set<String> mapped = new HashSet<>();
-        for (Field f : fields) {
-            NumberRef num = (NumberRef) f.getAnnotation(NumberRef.class);
-            if (num != null) {
-                if (num.value().compareTo("") == 0) {
+        for (Field curField : fields) {
+            NumberRef numAnnotation = (NumberRef) curField.getAnnotation(NumberRef.class);
+            if (numAnnotation != null) {
+                if (numAnnotation.value().compareTo("") == 0) {
                     throw new NoReference("Field name undifined");
                 }
 
-                Field field = c.getDeclaredField(num.value());
-                if(mapped.contains(field.getName())){
-                    fieldDAOs.removeIf(line -> line.getField().compareTo(field.getName())==0);
-                    mapped.remove(field.getName());
+                Field referedField = c.getDeclaredField(numAnnotation.value());
+                if(mapped.contains(referedField.getName())){
+                    fieldDAOs.removeIf(line -> line.getField().compareTo(referedField.getName())==0);
+                    mapped.remove(referedField.getName());
                 }
                 Class[] types = new Class[1];
-                types[0] = field.getType();
-                Method setter = c.getDeclaredMethod("set" + InterDB.toUp(field.getName()), types);
+                types[0] = referedField.getType();
+                Method setter = c.getDeclaredMethod("set" + InterDB.toUp(referedField.getName()), types);
 
-                Method getter = c.getDeclaredMethod("get" + InterDB.toUp(field.getName()));
-                Method numRefGetter = c.getDeclaredMethod("get" + InterDB.toUp(f.getName()));
+                Method getter = c.getDeclaredMethod("get" + InterDB.toUp(referedField.getName()));
+                Method numRefGetter = c.getDeclaredMethod("get" + InterDB.toUp(curField.getName()));
 
                 FieldDAO temp = new FieldDAO();
 
-                temp.setNumRef(f.getName());
+                temp.setNumRef(curField.getName());
                 temp.setNumRefGetter(numRefGetter);
 
-                temp.setField(field.getName());
+                temp.setField(referedField.getName());
                 temp.setGetter(getter);
                 temp.setSetter(setter);
                 
-                if (field.getName().compareTo(elements[1]) == 0) {
+                if (referedField.getName().compareTo(elements[1]) == 0) {
                     temp.setId(true);
                 }
 
                 fieldDAOs.add(temp);
-                mapped.add(field.getName());
+                mapped.add(referedField.getName());
             } else {
-                if (!mapped.contains(f.getName())) {
+                if (!mapped.contains(curField.getName())) {
                     FieldDAO temp = new FieldDAO();
 
-                    Method getter = c.getMethod("get" + InterDB.toUp(f.getName()));
+                    Method getter = c.getMethod("get" + InterDB.toUp(curField.getName()));
                     Class[] types = new Class[1];
-                    types[0] = f.getType();
-                    Method setter = c.getDeclaredMethod("set" + InterDB.toUp(f.getName()), types);
-                    temp.setField(f.getName());
+                    types[0] = curField.getType();
+                    Method setter = c.getDeclaredMethod("set" + InterDB.toUp(curField.getName()), types);
+                    temp.setField(curField.getName());
                     temp.setGetter(getter);
                     temp.setSetter(setter);
 
-                    if (f.getName().compareTo(elements[1]) == 0) {
+                    if (curField.getName().compareTo(elements[1]) == 0) {
                         temp.setId(true);
                     }
 
                     fieldDAOs.add(temp);
-                    mapped.add(f.getName());
+                    mapped.add(curField.getName());
                 }
             }
         }
