@@ -14,7 +14,7 @@ public class DateUtil {
         String[] parts= date.split("-");
         if(parts.length!=3) throw new Exception("invalide date : '"+date+"'");
         if(parts[0].length()<4){
-            date=parts[2]+parts[1]+parts[0];
+            date=parts[2]+"-"+parts[1]+"-"+parts[0];
         }
         return date;
     }
