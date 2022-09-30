@@ -5,6 +5,7 @@
 package main;
 
 import java.sql.Date;
+import java.sql.Timestamp;
 import utilities.stringParse.StringParser;
 
 /**
@@ -19,8 +20,8 @@ public class TesteStringParser {
     public static void main(String[] args) {
         // TODO code application logic here
         try {
-            float d=StringParser.parse(float.class, "15.8");
-            System.out.println(d+2);
+            Timestamp d=StringParser.parse(Timestamp.class, "15/02/2022 15:25:57");
+            System.out.println(d);
             Date date=StringParser.parse(Date.class, "2022-11-25");
             System.out.println(StringParser.toSql(date));
         } catch (Exception e) {
