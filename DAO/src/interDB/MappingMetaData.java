@@ -8,18 +8,24 @@ import java.sql.ResultSetMetaData;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.sql.Connection;
+import java.sql.Types;
+import java.sql.Date;
+import java.sql.Timestamp;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- *
+ *an instance of this class contains all the metadatas that describe the 'subject class' relation with the database
  * @author andyrazafy
  */
 public class MappingMetaData {
+    
     private final Class subject;
     private String table;
     private String idName;
@@ -28,13 +34,50 @@ public class MappingMetaData {
     private IdType idType;
     private String tempTable;
     private Set<FieldDAO> fieldsMetaData;
+    /**
+     * columns from database.
+     * important, these columns are in upperCase
+     */
+    private List<String> columns;
+    /**
+     * fields metadata matching the columns.
+     * Which means if the class is a subclass and the table in DB does not require all the fields of its parent class then this
+     * list only contains the essentials
+     */
+    private List<FieldDAO> fieldsFromColumns;
 
+    static private int getSQLType(String name) {
+        if(int.class.getCanonicalName().compareTo(name)==0) return Types.INTEGER;
+        if(Integer.class.getCanonicalName().compareTo(name)==0) return Types.INTEGER;
+        if(double.class.getCanonicalName().compareTo(name)==0) return Types.DOUBLE;
+        if(Double.class.getCanonicalName().compareTo(name)==0) return Types.DOUBLE;
+        if(float.class.getCanonicalName().compareTo(name)==0) return Types.FLOAT;
+        if(Float.class.getCanonicalName().compareTo(name)==0) return Types.FLOAT;
+        if(Date.class.getCanonicalName().compareTo(name)==0) return Types.DATE;
+        if(Timestamp.class.getCanonicalName().compareTo(name)==0) return Types.TIMESTAMP;
+        return Types.VARCHAR;
+    }
+    
     public MappingMetaData(Class subject,Connection con)throws Exception {
         this.subject = subject;
         init(con);
     }
-    
 
+    public List<FieldDAO> getFieldsFromColumns() {
+        return fieldsFromColumns;
+    }
+
+    public void setFieldsFromColumns(List<FieldDAO> fieldsFromColumns) {
+        this.fieldsFromColumns = fieldsFromColumns;
+    }
+
+    public List<String> getColumns() {
+        return columns;
+    }
+
+    public void setColumns(List<String> columns) {
+        this.columns = columns;
+    }
     
     public String getTempTable() {
         return tempTable;
@@ -97,19 +140,28 @@ public class MappingMetaData {
         return fieldsMetaData;
     }
     
+    /**
+     * get all the metadata of this class
+     * @param con
+     * @throws Exception 
+     */
     private void init(Connection con)throws Exception{
         mapTable();
         mapFields(con);
     }
 
+    /**
+     * get the metadata which refers to the interaction with the database of the class
+     * 
+     * @throws Exception 
+     */
     private void mapTable() throws Exception {
         DBTable tab = (DBTable) this.getSubject().getAnnotation(DBTable.class);
         System.out.println("tab: "+tab);
-        String table = null;
         if (tab == null) {
             throw new NoReference("Annotation table undifined");
         } else {
-            this.setTable(table);
+            this.setTable(tab.table());
         }
         ///les annotations de references d'une class
         this.setIdName(tab.id());
@@ -129,17 +181,20 @@ public class MappingMetaData {
         }
     }
     
-    private Set<String> getColumnsFromTable(Connection con)throws Exception{
+    /**
+     * get the all the columns in the table and store it in upperCase;
+     * @param con
+     * @throws Exception 
+     */
+    private void setColumnsFromTable(Connection con)throws Exception{
         String req= "select * from "+getTable()+" where 1>2";
         Statement stmt=null;
         ResultSet res=null;
-        Set<String> columns=null;
         try {
             stmt=con.createStatement();
             res=stmt.executeQuery(req);
             ResultSetMetaData resMeta= res.getMetaData();
-            columns=getColumnsName(resMeta);
-            return columns;
+            this.columns=getColumnsName(resMeta);
         } catch (Exception e) {
             e.printStackTrace();
             throw e;
@@ -148,20 +203,34 @@ public class MappingMetaData {
             if(stmt!=null) stmt.close();
         }
     }
-    private static Set<String> getColumnsName(ResultSetMetaData meta)throws Exception {
-        Set<String> columnsName=new HashSet<>();
+    private static List<String> getColumnsName(ResultSetMetaData meta)throws Exception {
+        List<String> columnsName=new ArrayList<>();
         
         for(int i=1;i<=meta.getColumnCount();i++){
             columnsName.add(meta.getColumnName(i).toUpperCase());
         }
         return columnsName;
     }
+    
+    /**
+     * get all the fieldDAO from the fields that match the table columns in the database
+     * @param con
+     * @throws Exception 
+     */
     private void mapFields(Connection con) throws Exception {
-        Set<String> columns= getColumnsFromTable(con);
+        setColumnsFromTable(con);
         Field[] fields = this.getSubject().getDeclaredFields();
         Set<FieldDAO> fieldDAOs = new HashSet<>();
         Set<String> mapped = new HashSet<>();
+        boolean idFound=false;
+        if(this.getIdName()==null){
+            idFound=true;
+        }
         for (Field curField : fields) {
+            /**
+             * NumberRef is used to refer a number field if set or not.
+             * it is a boolean annotation
+             */
             NumberRef numAnnotation = (NumberRef) curField.getAnnotation(NumberRef.class);
             if (numAnnotation != null) {
                 if (numAnnotation.value().compareTo("") == 0) {
@@ -188,8 +257,9 @@ public class MappingMetaData {
                 temp.setGetter(getter);
                 temp.setSetter(setter);
                 
-                if (referedField.getName().compareTo(this.getIdName()) == 0) {
+                if (this.idName!=null&&referedField.getName().compareTo(this.getIdName()) == 0) {
                     temp.setId(true);
+                    idFound=true;
                 }
 
                 fieldDAOs.add(temp);
@@ -206,8 +276,9 @@ public class MappingMetaData {
                     temp.setGetter(getter);
                     temp.setSetter(setter);
 
-                    if (curField.getName().compareTo(this.getIdName()) == 0) {
+                    if (this.idName!=null&&curField.getName().compareTo(this.getIdName()) == 0) {
                         temp.setId(true);
+                        idFound=true;
                     }
 
                     fieldDAOs.add(temp);
@@ -215,9 +286,63 @@ public class MappingMetaData {
                 }
             }
         }
+        if(!idFound){
+            throw new NoReference("id not found "+this.getIdName());
+        }
         fieldsMetaData=fieldDAOs;
     }
     
+    public List<FieldDAO> getFieldsWithoutIDSet(Object o)throws Exception{
+        return getFieldsWithoutReferenceSet(o, this.getIdName());
+    }
+    /**
+     * used to get the metadata of the field that are set in this current class exept the specified reference field
+     * Usually used in insert or update.
+     * @param o
+     * @param ref
+     * @return
+     * @throws Exception 
+     */
+    public List<FieldDAO> getFieldsWithoutReferenceSet(Object o,String ref)throws Exception{
+        return fieldsMetaData.stream()
+                .filter(line -> {
+                    if(line.getField().compareTo(ref)==0) return false;
+                    return line.isSet(o);
+                })
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+    
+    /**
+     * used to get the metadata of the field that are set in this current class 
+     * @param o
+     * @return
+     * @throws Exception 
+     */
+    public List<FieldDAO> getFieldsSet(Object o)throws Exception{
+        return fieldsMetaData.stream()
+                .filter(line -> line.isSet(o))
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+    
+    /**
+     * used to fill the fields(param) with the fields metadata that match the columns and are in this mapping metadata. 
+     * @param o
+     * @param columns this param is the columns in the table but in upperCase
+     * @param fields
+     * @throws Exception 
+     */
+    public void getFields(List<String> columns,List<FieldDAO> fields)throws Exception{
+        if(fields==null)
+            fields= new ArrayList<>();
+        for (int i = 0; i < columns.size(); i++) {
+            for(FieldDAO field:this.fieldsMetaData){
+                if(field.getField().toUpperCase().compareTo(columns.get(i))==0){
+                    fields.add(i, field);
+                    break;
+                }
+            }
+        }
+    }
     private static String toUp(String s) {
         char[] l = s.toCharArray();
         l[0] = Character.toUpperCase(l[0]);

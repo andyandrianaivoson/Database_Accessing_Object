@@ -13,13 +13,13 @@ import interDB.IdType;
  */
 @DBTable(id = "id",table = "departement",idType = IdType.SERIAL)
 public class Departement {
-    private Integer id;
+    private int id;
     private String nom;
 
     public Departement() {
     }
 
-    public Departement(Integer id, String nom) {
+    public Departement(int id, String nom) {
         this.id = id;
         this.nom = nom;
     }
@@ -28,11 +28,11 @@ public class Departement {
         this.nom = nom;
     }
     
-    public Integer getId() {
+    public int getId() {
         return id;
     }
 
-    public void setId(Integer id) {
+    public void setId(int id) {
         this.id = id;
     }
 
@@ -43,5 +43,11 @@ public class Departement {
     public void setNom(String nom) {
         this.nom = nom;
     }
+
+    @Override
+    public String toString() {
+        return "Departement{" + "id=" + id + ", nom=" + nom + '}';
+    }
+    
     
 }

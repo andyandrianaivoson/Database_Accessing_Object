@@ -10,12 +10,12 @@ import utilities.stringParse.Parser;
  *
  * @author andyrazafy
  */
-public class FloatfParser implements Parser {
+public class LongParser implements Parser {
 
     @Override
     public Object parse(String parameter) throws Exception {
         if(parameter.isEmpty()) return 0;
-        return Float.parseFloat(parameter);
+        return Long.parseLong(parameter);
     }
     
     @Override

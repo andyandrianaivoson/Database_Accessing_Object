@@ -6,10 +6,10 @@ package main;
 
 import connexion.Connexion;
 import interDB.InterDB;
-import java.util.ArrayList;
+import interDB.SearchParameter;
 import java.util.List;
 import java.util.stream.Collectors;
-import personne.Personne;
+import teste.Departement;
 //import teste.Signalement;
 
 /**
@@ -26,32 +26,37 @@ public class NewMain1 {
         Connexion con= new Connexion();
         try {
 //            -------------------Insert-------------------------
-//            Departement d=new Departement("finance");
-//            Departement d1=new Departement("comptabilite");
-//            Departement d2=new Departement("rh");
+//            Departement d=new Departement("scolaire");
+//            Departement d1=new Departement("management");
+//            Departement d2=new Departement("commerce");
 ////            fananiko natao roa mihitsy le rh
-//            Departement d3=new Departement("rh");
+//            Departement d3=new Departement("compta");
 //            InterDB.insert(con.getCon(),d);
 //            InterDB.insert(con.getCon(),d1);
 //            InterDB.insert(con.getCon(),d2);
 //            InterDB.insert(con.getCon(),d3);
             
-//            con.getCon().commit();
-//            ------------------find----------------------------
-//            Departement ref=new Departement("rh");
-//            List<Departement> liste=InterDB.find(con.getCon(), ref).stream()
-//                    .map(line -> (Departement)line)
-//                    .collect(Collectors.toList());
 //            
+//            ------------------find----------------------------
+            Departement ref=new Departement();
+            ref.setId(5);
+            List<Departement> liste=InterDB.find(con.getCon(),ref,new SearchParameter(),"");
+            liste.get(0).setNom("teste update");
+            InterDB.update(con.getCon(), liste.get(0), null);
 //            
 //            liste.forEach(line -> System.out.println(line.getId()+" "+line.getNom()));
-            List<Object> parameters= new ArrayList<>();
-            Personne p= new Personne();
-            p.setNom("zafy");
-            String req="select nom,dtn,sum(masse) masse from personne group by nom,dtn";
-//            List<Personne> liste = InterDB.find(con.getCon(),Personne.class, req, parameters);
-            List<Personne> liste = InterDB.find(con.getCon(), p);
-            liste.forEach(line -> System.out.println(line.getMasse()));
+//            List<Object> parameters= new ArrayList<>();
+//            Personne p= new Personne();
+//            //p.setNom("a");
+//            SearchParameter param= new SearchParameter();
+//            param.addMinInTheVariable("masse", 30);
+//            param.addMaxInTheVariable("masse", 49);
+//            String req="select nom,dtn,sum(masse) masse from personne group by nom,dtn";
+////            List<Personne> liste = InterDB.find(con.getCon(),Personne.class, req, parameters);
+//
+//            List<Personne> liste = InterDB.find(con.getCon(), p, " order by masse", param);
+            liste.forEach(line -> System.out.println(line.toString()));
+            con.getCon().commit();
         } catch (Exception e) {
             try {
                 con.getCon().rollback();

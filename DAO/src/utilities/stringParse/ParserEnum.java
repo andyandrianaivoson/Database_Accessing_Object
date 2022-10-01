@@ -8,14 +8,14 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.sql.Time;
 import utilities.stringParse.parserImpl.DateParser;
-import utilities.stringParse.parserImpl.DoubleDParser;
-import utilities.stringParse.parserImpl.DoubledParser;
-import utilities.stringParse.parserImpl.FloatFParser;
-import utilities.stringParse.parserImpl.FloatfParser;
+import utilities.stringParse.parserImpl.DoubleClassParser;
+import utilities.stringParse.parserImpl.DoubleParser;
+import utilities.stringParse.parserImpl.FloatClassParser;
+import utilities.stringParse.parserImpl.FloatParser;
 import utilities.stringParse.parserImpl.IntParser;
 import utilities.stringParse.parserImpl.IntegerParser;
-import utilities.stringParse.parserImpl.LongLParser;
-import utilities.stringParse.parserImpl.LonglParser;
+import utilities.stringParse.parserImpl.LongClassParser;
+import utilities.stringParse.parserImpl.LongParser;
 import utilities.stringParse.parserImpl.TimeParser;
 import utilities.stringParse.parserImpl.TimestampParser;
 
@@ -30,12 +30,12 @@ import utilities.stringParse.parserImpl.TimestampParser;
  */
 public enum ParserEnum {
     INT(int.class.getCanonicalName(),new IntParser()),
-    DOUBLE(double.class.getCanonicalName(),new DoubledParser()),
-    DDOUBLE(Double.class.getCanonicalName(),new DoubleDParser()),
-    FLOAT(float.class.getCanonicalName(),new FloatfParser()),
-    FFLOAT(Float.class.getCanonicalName(),new FloatFParser()),
-    LONG(long.class.getCanonicalName(),new LonglParser()),
-    LLONG(Long.class.getCanonicalName(),new LongLParser()),
+    DOUBLE(double.class.getCanonicalName(),new DoubleParser()),
+    DDOUBLE(Double.class.getCanonicalName(),new DoubleClassParser()),
+    FLOAT(float.class.getCanonicalName(),new FloatParser()),
+    FFLOAT(Float.class.getCanonicalName(),new FloatClassParser()),
+    LONG(long.class.getCanonicalName(),new LongParser()),
+    LLONG(Long.class.getCanonicalName(),new LongClassParser()),
     DATE(Date.class.getCanonicalName(),new DateParser()),
     TIMESTAMP(Timestamp.class.getCanonicalName(),new TimestampParser()),
     TIME(Time.class.getCanonicalName(),new TimeParser()),

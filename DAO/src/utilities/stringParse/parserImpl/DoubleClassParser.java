@@ -11,7 +11,7 @@ import utilities.stringParse.Parser;
  *
  * @author andyrazafy
  */
-public class DoubleDParser implements Parser {
+public class DoubleClassParser implements Parser {
 
     @Override
     public Object parse(String parameter) throws Exception {

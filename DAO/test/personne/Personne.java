@@ -16,6 +16,12 @@ public class Personne {
     private Date dtn;
     private Double masse;
 
+    @Override
+    public String toString() {
+        return "Personne{" + "nom=" + nom + ", dtn=" + dtn + ", masse=" + masse + '}';
+    }
+
+    
     public Personne() {
     }
 

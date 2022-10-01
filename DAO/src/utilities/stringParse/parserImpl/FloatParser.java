@@ -10,16 +10,16 @@ import utilities.stringParse.Parser;
  *
  * @author andyrazafy
  */
-public class LongLParser implements Parser {
+public class FloatParser implements Parser {
 
     @Override
     public Object parse(String parameter) throws Exception {
-        if(parameter.isEmpty()) return null;
-        return Long.valueOf(parameter);
+        if(parameter.isEmpty()) return 0;
+        return Float.parseFloat(parameter);
     }
     
     @Override
     public String toSql(Object obj) throws Exception {
-        return ((Long)obj).toString();
+        return String.valueOf(obj);
     }
 }

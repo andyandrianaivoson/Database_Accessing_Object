@@ -10,7 +10,7 @@ import utilities.stringParse.Parser;
  *
  * @author andyrazafy
  */
-public class DoubledParser implements Parser {
+public class DoubleParser implements Parser {
 
     @Override
     public Object parse(String parameter) throws Exception {
